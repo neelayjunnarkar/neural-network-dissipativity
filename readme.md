@@ -24,7 +24,7 @@ Note that the code is configured to use [Mosek](https://www.mosek.com/), which r
 
 With the appropriate python version activated (for example, using [pyenv](https://github.com/pyenv/pyenv)), use either of the following options to install dependencies.
 
-#### Install dependencies with [Poetry](https://python-poetry.org/)
+#### Install dependencies with [Poetry](https://python-poetry.org/) (recommended)
 
 1) `poetry install`. This will install some items then error. The following commands will resolve the error.
 2) `poetry run pip install setuptools==65.5.0 pip==21`
