@@ -67,6 +67,10 @@ class FlexibleArmEnv(gym.Env):
             assert "design_integrator_type" in env_config
             design_integrator_type = env_config["design_integrator_type"]
 
+        
+        self.saturate_inputs = env_config["saturate_inputs"] if "saturate_inputs" in env_config else True
+        assert self.saturate_inputs in [True, False]
+
         self.mb = 1  # Mass of base (Kg)
         self.mt = 0.1  # Mass of tip (Kg)
         self.L = 1  # Length of link (m)
@@ -220,7 +224,8 @@ class FlexibleArmEnv(gym.Env):
         return state
 
     def step(self, u, fail_on_state_space=True, fail_on_time_limit=True):
-        u = np.clip(u, -self.max_force, self.max_force)
+        if self.saturate_inputs:
+            u = np.clip(u, -self.max_force, self.max_force)
 
         if self.disturbance_model == "none":
             d = np.zeros((self.nd,), dtype=np.float32)
@@ -242,7 +247,7 @@ class FlexibleArmEnv(gym.Env):
         # Reward for small state and small control
         reward_state = np.exp(-(np.linalg.norm(self.state) ** 2))
         reward_control = np.exp(-(np.linalg.norm(u) ** 2))
-        reward = reward_control
+        reward = reward_state + reward_control
 
         # reward_state = np.linalg.norm(self.state_space.high)**2 - np.linalg.norm(self.state)**2
         # reward_state = 0.5 * reward_state / (np.linalg.norm(self.state_space.high)**2)

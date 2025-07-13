@@ -20,6 +20,9 @@ class InvertedPendulumEnv(gym.Env):
         assert "disturbance_model" in env_config
         self.disturbance_model = env_config["disturbance_model"]
 
+        self.saturate_inputs = env_config["saturate_inputs"] if "saturate_inputs" in env_config else True
+        assert self.saturate_inputs in [True, False]
+
         self.g = 9.8  # gravity (m/s^2)
         self.m = 0.15  # mass (Kg)
         self.l = 0.5  # length of pendulum (m)
@@ -195,7 +198,8 @@ class InvertedPendulumEnv(gym.Env):
         return state
 
     def step(self, u, fail_on_state_space=True, fail_on_time_limit=True):
-        u = np.clip(u, -self.max_torque, self.max_torque)
+        if self.saturate_inputs:
+            u = np.clip(u, -self.max_torque, self.max_torque)
 
         if self.disturbance_model == "none":
             d = np.zeros((self.nd,), dtype=np.float32)
