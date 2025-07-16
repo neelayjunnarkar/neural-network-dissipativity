@@ -65,7 +65,9 @@ class FlexibleArmEnv(gym.Env):
 
         if design_model == "rigidplus_integrator":
             assert "design_integrator_type" in env_config
+            assert "b" in env_config
             design_integrator_type = env_config["design_integrator_type"]
+            b = env_config["b"]
 
         self.mb = 1  # Mass of base (Kg)
         self.mt = 0.1  # Mass of tip (Kg)
@@ -134,6 +136,7 @@ class FlexibleArmEnv(gym.Env):
                 supplyrate_scale,
                 lagrange_multiplier,
                 design_integrator_type,
+                b
             )
         else:
             raise ValueError(f"Unexpected design model: {design_model}.")
@@ -187,8 +190,8 @@ class FlexibleArmEnv(gym.Env):
         # TODO(Neelay): this nonlin_size parameter likely only works when nv = nw. Fix.
         self.nonlin_size = self.nv
 
-        # self.max_reward = 2.0
-        self.max_reward = 1.0
+        self.max_reward = 2.0
+        # self.max_reward = 1.0
 
         self.seed(env_config["seed"] if "seed" in env_config else None)
 
@@ -242,7 +245,7 @@ class FlexibleArmEnv(gym.Env):
         # Reward for small state and small control
         reward_state = np.exp(-(np.linalg.norm(self.state) ** 2))
         reward_control = np.exp(-(np.linalg.norm(u) ** 2))
-        reward = reward_control
+        reward = reward_state + reward_control
 
         # reward_state = np.linalg.norm(self.state_space.high)**2 - np.linalg.norm(self.state)**2
         # reward_state = 0.5 * reward_state / (np.linalg.norm(self.state_space.high)**2)
@@ -606,6 +609,7 @@ class FlexibleArmEnv(gym.Env):
         supplyrate_scale,
         lagrange_multiplier,
         design_integrator_type,
+        b
     ):
         assert observation == "partial", "This model only supports partial observation"
         assert disturbance_model == "occasional", "This model only supports disturbance"
@@ -636,7 +640,7 @@ class FlexibleArmEnv(gym.Env):
             Dpvu = np.eye(1, dtype=np.float32)
             Dpvd = np.copy(Dpvu)
             ## w = Delta(v), with ||Delta|| <= b = 0.0005
-            b = 0.0005
+            # b = 0.0005
             ## y = x1 + w
             Dpyw = np.eye(1, dtype=np.float32)
         elif design_integrator_type == "utox2":
@@ -645,7 +649,7 @@ class FlexibleArmEnv(gym.Env):
             Dpvu = np.eye(1, dtype=np.float32)
             Dpvd = np.copy(Dpvu)
             ## w = Delta(v), with ||Delta|| <= b = 0.1
-            b = 0.1
+            # b = 0.1
             ## x2dot = (u+d)/Mr
             ## x1dot = x2 + w
             Bpw = np.array([[1], [0]], dtype=np.float32)
