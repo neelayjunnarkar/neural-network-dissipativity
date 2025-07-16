@@ -30,9 +30,25 @@ def print_norms(X, name):
 
 class DissipativeSimplestRINN(RecurrentNetwork, nn.Module):
     """
-    A recurrent implicit neural network of the following form: TODO(Neelay)
+    A recurrent implicit neural network controller of the form
 
-    Train with a method that calls project after each gradient step.
+    xdot(t) = A  x(t) + Bw  w(t) + By  y(t)
+    v(t)    = Cv x(t) + Dvw w(t) + Dvy y(t)
+    u(t)    = Cu x(t) + Duw w(t) + Duy y(t)
+    w(t)    = phi(v(t))
+
+    where x is the state, v is the input to the activation function phi,
+    w is the output of the activation function phi, y is the input,
+    and u is the output.
+
+    This controller is parameterized in theta parameters and applies
+    a projection as necessary to ensure closed-loop dissipativity.
+    The particular type of projection used depends on the `mode` parameter.
+    See "Synthesizing Neural Network Controllers with Closed-Loop Dissipativity Guarantees".
+
+    The projection method need not be called after every training step.
+    However, the dissipativity constraint is only guaranteed to be satisfied
+    after a call to the projection.
     """
 
     # Custom config parameters:
@@ -367,7 +383,7 @@ class DissipativeSimplestRINN(RecurrentNetwork, nn.Module):
         except Exception as _e:
             print("Using first projection result for thetahat -> theta.")
             new_new_theta = new_theta
-            raise _e # terminating with this failure
+            raise _e  # terminating with this failure
 
         new_k = new_new_theta
 

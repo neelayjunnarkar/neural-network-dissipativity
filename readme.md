@@ -1,43 +1,48 @@
-Synthesis of Stabilizing Recurrent Equilibrium Network Controllers
-==================================================================
+Synthesizing Neural Network Controllers with Closed-Loop Dissipativity Guarantees
+===================================
 
-This is an implementation of the stabilizing REN controller presented at CDC 2022:
-```
-@INPROCEEDINGS{9992684,
-  author={Junnarkar, Neelay and Yin, He and Gu, Fangda and Arcak, Murat and Seiler, Peter},
-  booktitle={2022 IEEE 61st Conference on Decision and Control (CDC)}, 
-  title={Synthesis of Stabilizing Recurrent Equilibrium Network Controllers}, 
-  year={2022},
-  volume={},
-  number={},
-  pages={7449-7454},
-  doi={10.1109/CDC51059.2022.9992684}}
-```
+This repository contains code for the paper "[Synthesizing Neural Network Controllers with Closed-Loop Dissipativity Guarantees](https://arxiv.org/abs/2404.07373)".
+
+See `train_controller.py` for example usage.
 
 ## File Structure
 
-* `envs`: models of plants.
-* `models`: controller models and an implicit model for system identification. The controller presented in the paper is in `ProjREN.py`.
-* `learned_models`: parameters trained with an implicit model for system identification.
-* `activations.py`: activation functions with sector-bound information.
+* `models`: controller models.
+  * See comments at the top of each file for further information on each model.
+  * The model we present, that ensures closed-loop dissipativity, is implemented in `dissipative_simplest_RINN.py`.
+  * An unconstrained recurrent implicit neural network (RINN) model is implemented in `RINN.py`.
+* `envs`: plant models.
 * `trainers.py`: trainers modified to include the projection step.
+* `trained_controllers`: contains the parameters for the trained controllers used in the experiments in the paper. See the paper or the comments in the relevant file in the `models` folder for how to form the controller from the parameters.
 
 ### Runnable files
 * `train_controller.py`: configure and train controllers.
-* `train_implicit_network.py`: train an implicit model to learn plant dynamics.
-* `plots.py` and `rollout.py`: plotting files.
-
-## Package Requirements
-
-This code is tested with Python 3.9 and PyTorch 1.10.
-
-## Credits
-* The fixed point solvers in the `deq_lib` folder and the basis for the PyTorch implicit model implementation are from the [Deep Equilibrium Models](https://github.com/locuslab/deq) repository.
 
 ## Setup
 
-* `poetry install`
-* Above will install some items then error. Run `poetry run pip install gym==0.21`
-* Now run `poetry install` again 
+This code is tested with Python 3.10.
+Note that the code is configured to use [Mosek](https://www.mosek.com/), which requires a license (of which an academic one is freely available).
 
-Then, controller training can be run with `poetry run python train_controller.py`
+With the appropriate python version activated (for example, using [pyenv](https://github.com/pyenv/pyenv)), use either of the following options to install dependencies.
+
+#### Install dependencies with [Poetry](https://python-poetry.org/)
+
+1) `poetry install`. This will install some items then error. The following commands will resolve the error.
+2) `poetry run pip install setuptools==65.5.0 pip==21`
+3) `poetry run pip install wheel==0.38.0`
+4) `poetry run pip install gym==0.21`
+5) Now run `poetry install` again.
+
+Then, controller training can be run with `poetry run python train_controller.py`.
+
+#### Install dependencies from `requirements.txt`
+
+Note: this option may require installing system dependencies such as cmake, ninja-build, and compilers for C, C++, and Fortran. The poetry installation system handles these dependencies.
+
+1) `pip install -r requirements.txt`. This will install some items then error. The following commands will resolve the error.
+2) `pip install setuptools==65.5.0 pip==21`
+3) `pip install wheel==0.38.0`
+4) `pip install gym==0.21`
+5) Now run `pip install -r requirements.txt` again.
+
+Then, controller training can be run with `python train_controller.py`.
