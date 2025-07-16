@@ -215,6 +215,7 @@ class LTIModel(RecurrentNetwork, nn.Module):
         except Exception as _e:
             print("Using first projection result for thetahat -> theta.")
             new_new_theta = new_theta
+            raise _e
 
         new_k = new_new_theta
 
