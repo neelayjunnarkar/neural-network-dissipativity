@@ -2,16 +2,14 @@
 Configure and train controllers.
 """
 
-import math
-import os
-import multiprocessing
 import argparse
+import math
+import multiprocessing
+import os
 
 import numpy as np
-import ray
-from ray import tune
-from ray.rllib.agents.ppo import PPOTrainer
 
+import ray
 from envs import FlexibleArmEnv, InvertedPendulumEnv, TimeDelayInvertedPendulumEnv
 from models import (
     RINN,
@@ -20,6 +18,8 @@ from models import (
     ImplicitModel,
     LTIModel,
 )
+from ray import tune
+from ray.rllib.agents.ppo import PPOTrainer
 from trainers import ProjectedPPOTrainer
 
 # =====================
@@ -27,7 +27,7 @@ from trainers import ProjectedPPOTrainer
 # =====================
 
 
-def get_inverted_pendulum_env(seed):
+def get_inverted_pendulum_env(seed, saturate_inputs, reward_type=None):
     dt = 0.01
     env = InvertedPendulumEnv
     env_config = {
@@ -36,13 +36,15 @@ def get_inverted_pendulum_env(seed):
         "dt": dt,
         "supply_rate": "stability",  # "stability",
         "disturbance_model": "occasional",
-        "saturate_inputs": False,
         "seed": seed,
+        "saturate_inputs": saturate_inputs,
     }
+    if reward_type is not None:
+        env_config["reward_type"] = reward_type
     return dt, env, env_config
 
 
-def get_time_delay_inverted_pendulum_env(seed):
+def get_time_delay_inverted_pendulum_env(seed, saturate_inputs):
     dt = 0.01
     env = TimeDelayInvertedPendulumEnv
     env_config = {
@@ -51,13 +53,13 @@ def get_time_delay_inverted_pendulum_env(seed):
         "dt": dt,
         "design_time_delay": 0.07,
         "time_delay_steps": 5,
-        "saturate_inputs": False,
         "seed": seed,
+        "saturate_inputs": saturate_inputs,
     }
     return dt, env, env_config
 
 
-def get_flexible_arm_env_full(seed):
+def get_flexible_arm_env_full(seed, saturate_inputs, l2_gain=None, reward_type=None):
     dt = 0.001  # or 0.0001
     env = FlexibleArmEnv
     env_config = {
@@ -69,13 +71,17 @@ def get_flexible_arm_env_full(seed):
         "disturbance_model": "none",
         "disturbance_design_model": "occasional",
         "design_model": "rigid",
-        "saturate_inputs": False,
         "seed": seed,
+        "saturate_inputs": saturate_inputs,
     }
+    if l2_gain is not None:
+        env_config["gamma"] = l2_gain
+    if reward_type is not None:
+        env_config["reward_type"] = reward_type
     return dt, env, env_config
 
 
-def get_flexible_arm_env_partial(seed):
+def get_flexible_arm_env_partial(seed, saturate_inputs, l2_gain=None, reward_type=None):
     dt = 0.001
     env = FlexibleArmEnv
     env_config = {
@@ -94,9 +100,13 @@ def get_flexible_arm_env_partial(seed):
         # "design_integrator_type": "utoy",
         # "supplyrate_scale": 1,
         # "lagrange_multiplier": 1000,
-        "saturate_inputs": False,
+        "saturate_inputs": saturate_inputs,
         "seed": seed,
     }
+    if l2_gain is not None:
+        env_config["gamma"] = l2_gain
+    if reward_type is not None:
+        env_config["reward_type"] = reward_type
     return dt, env, env_config
 
 
@@ -167,7 +177,7 @@ def get_lti_model(dt, env, env_config, trs, backoff):
             "log_std_init": np.log(1.0),
             "state_size": 2,
             "trs_mode": "fixed",
-            "min_trs": trs, # 1.5, # 1.44,
+            "min_trs": trs,  # 1.5, # 1.44,
             "lti_controller": "dissipative_thetahat",
             "lti_controller_kwargs": {
                 "trs_mode": "fixed",
@@ -215,8 +225,38 @@ def main():
         default=1.05,
         help="Suboptimal projection allowance for numerical conditioning in dissipative models",
     )
-    parser.add_argument("--experiment_name", type=str, default="scratch", help="Name of the experiment for logging")
+    parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default="scratch",
+        help="Name of the experiment for logging",
+    )
+    parser.add_argument(
+        "--no_input_saturation",
+        action="store_true",
+        help="If set, environment will clip actions to action_space bounds (default: False)",
+    )
+    parser.add_argument(
+        "--l2_gain",
+        type=float,
+        default=None,
+        help="L2 gain gamma for flexible arm environments",
+    )
+    parser.add_argument(
+        "--reward_type",
+        type=str,
+        default=None,
+        help="Reward type for environments (default or quadratic)",
+    )
+    parser.add_argument(
+        "--timesteps_total",
+        type=int,
+        default=1e7,
+        help="Total number of environment timesteps for training",
+    )
     args = parser.parse_args()
+
+    args.saturate_inputs = not args.no_input_saturation
 
     use_savio = False
     if use_savio:
@@ -231,13 +271,21 @@ def main():
 
     # Select environment based on command-line argument
     if args.env == "flexible_rod_partial":
-        dt, env, env_config = get_flexible_arm_env_partial(args.seed)
+        dt, env, env_config = get_flexible_arm_env_partial(
+            args.seed, args.saturate_inputs, args.l2_gain, args.reward_type
+        )
     elif args.env == "flexible_rod_full":
-        dt, env, env_config = get_flexible_arm_env_full(args.seed)
+        dt, env, env_config = get_flexible_arm_env_full(
+            args.seed, args.saturate_inputs, args.l2_gain, args.reward_type
+        )
     elif args.env == "inverted_pendulum":
-        dt, env, env_config = get_inverted_pendulum_env(args.seed)
+        dt, env, env_config = get_inverted_pendulum_env(
+            args.seed, args.saturate_inputs, args.reward_type
+        )
     elif args.env == "time_delay_inverted_pendulum":
-        dt, env, env_config = get_time_delay_inverted_pendulum_env(args.seed)
+        dt, env, env_config = get_time_delay_inverted_pendulum_env(
+            args.seed, args.saturate_inputs
+        )
     else:
         raise ValueError(f"Unknown environment: {args.env}")
 
@@ -271,6 +319,8 @@ def main():
         "evaluation_config": {"render_env": False, "explore": False},
         "evaluation_interval": 1,
         "evaluation_parallel_to_training": True,
+        "clip_actions": False,
+        "normalize_actions": args.saturate_inputs,
     }
 
     print("==================================")
@@ -306,14 +356,14 @@ def main():
         trainer_cls,
         config=config,
         stop={
-            "agent_timesteps_total": 1e7,  # 6100e3,
+            "agent_timesteps_total": args.timesteps_total,
         },
         verbose=1,
         trial_name_creator=name_creator,
         name=args.experiment_name,
         local_dir="ray_results",
         checkpoint_at_end=True,
-        checkpoint_freq=1000,
+        checkpoint_freq=100,
     )
 
 

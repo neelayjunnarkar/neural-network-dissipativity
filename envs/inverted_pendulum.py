@@ -166,6 +166,8 @@ class InvertedPendulumEnv(gym.Env):
 
         self.seed(env_config["seed"] if "seed" in env_config else None)
 
+        self.reward_type = env_config["reward_type"] if "reward_type" in env_config else "default"
+
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
@@ -218,12 +220,13 @@ class InvertedPendulumEnv(gym.Env):
 
         self.state = self.next_state(self.state, d, u)
 
-        # Reward for small angle, small angular velocity, and small control
-        theta, thetadot = self.state
-        reward_state = np.exp(-(theta**2)) + np.exp(-(thetadot**2))
-        reward_control = np.exp(-(u[0] ** 2))
-        # reward = reward_state + 0.1*reward_control
-        reward = reward_control
+        if self.reward_type == "default":
+            reward = np.exp(-(u[0] ** 2))
+        elif self.reward_type == "quadratic":
+            action_scale = 1/200.0
+            reward = self.max_reward - action_scale * u[0] ** 2
+        else:
+            raise ValueError(f"Unexpected reward type: {self.reward_type}.")
 
         terminated = False
         if fail_on_time_limit and self.time >= self.time_max:
