@@ -32,6 +32,9 @@ class FlexibleArmEnv(gym.Env):
         assert "supply_rate" in env_config
         self.supply_rate = env_config["supply_rate"]
 
+        # The gain for the L2 gain supply rate, if used.
+        self.gamma = env_config["gamma"] if "gamma" in env_config else 0.99
+        
         if "dt" in env_config:  # Discretization time (s)
             self.dt = env_config["dt"]
         else:
@@ -69,6 +72,10 @@ class FlexibleArmEnv(gym.Env):
             design_integrator_type = env_config["design_integrator_type"]
             b = env_config["b"]
 
+        
+        self.saturate_inputs = env_config["saturate_inputs"] if "saturate_inputs" in env_config else True
+        assert self.saturate_inputs in [True, False]
+
         self.mb = 1  # Mass of base (Kg)
         self.mt = 0.1  # Mass of tip (Kg)
         self.L = 1  # Length of link (m)
@@ -81,7 +88,7 @@ class FlexibleArmEnv(gym.Env):
         self.flexdamp = 0.9
         self.Mr = self.mb + self.mt + self.rho * self.L  # Total mass (Kg)
 
-        self.max_force = 20  # 200
+        self.max_force = 20
         self.max_x = 1.5
         self.max_h = 0.66 * self.L
         self.max_xdot = 25
@@ -190,10 +197,13 @@ class FlexibleArmEnv(gym.Env):
         # TODO(Neelay): this nonlin_size parameter likely only works when nv = nw. Fix.
         self.nonlin_size = self.nv
 
-        self.max_reward = 2.0
+        self.max_reward = 10.0
+        # self.max_reward = 2.0
         # self.max_reward = 1.0
 
         self.seed(env_config["seed"] if "seed" in env_config else None)
+
+        self.reward_type = env_config["reward_type"] if "reward_type" in env_config else "default"
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -223,7 +233,8 @@ class FlexibleArmEnv(gym.Env):
         return state
 
     def step(self, u, fail_on_state_space=True, fail_on_time_limit=True):
-        u = np.clip(u, -self.max_force, self.max_force)
+        if self.saturate_inputs:
+            u = np.clip(u, -self.max_force, self.max_force)
 
         if self.disturbance_model == "none":
             d = np.zeros((self.nd,), dtype=np.float32)
@@ -242,20 +253,16 @@ class FlexibleArmEnv(gym.Env):
 
         self.state = self.next_state(self.state, d, u)
 
-        # Reward for small state and small control
-        reward_state = np.exp(-(np.linalg.norm(self.state) ** 2))
-        reward_control = np.exp(-(np.linalg.norm(u) ** 2))
-        reward = reward_state + reward_control
-
-        # reward_state = np.linalg.norm(self.state_space.high)**2 - np.linalg.norm(self.state)**2
-        # reward_state = 0.5 * reward_state / (np.linalg.norm(self.state_space.high)**2)
-        # reward_control = np.linalg.norm(self.action_space.high)**2 - np.linalg.norm(u)**2
-        # reward_control = 0.5 * reward_control / (np.linalg.norm(self.action_space.high)**2)
-        # reward = reward_state + reward_control
-        # print(
-        #     f"State norm: {np.linalg.norm(self.state)}, control norm: {np.linalg.norm(u)}, reward state: {reward_state}, reward control: {reward_control}"
-        # )
-        # reward = reward_control
+        if self.reward_type == "default":
+            reward_state = np.exp(-(np.linalg.norm(self.state) ** 2))
+            reward_control = np.exp(-(np.linalg.norm(u) ** 2))
+            reward = reward_state + 9 * reward_control
+        elif self.reward_type == "quadratic":
+            state_scale = 1/2000.0
+            action_scale = 1/5.0
+            reward = 10.0 - state_scale*np.sum(np.linalg.norm(self.state)**2) - action_scale*np.sum(np.linalg.norm(u)**2)
+        else:
+            raise ValueError(f"Unexpected reward type: {self.reward_type}.")
 
         terminated = False
         if fail_on_time_limit and self.time >= self.time_max:
@@ -386,8 +393,7 @@ class FlexibleArmEnv(gym.Env):
             Dped = np.zeros((ne, nd), dtype=np.float32)
             Dpeu = np.zeros((ne, nu), dtype=np.float32)
 
-            gamma = 0.99
-            Xdd = gamma * np.eye(nd, dtype=np.float32)
+            Xdd = self.gamma**2 * np.eye(nd, dtype=np.float32)
             Xde = np.zeros((nd, ne), dtype=np.float32)
             Xee = -np.eye(ne, dtype=np.float32)
         else:
@@ -462,8 +468,7 @@ class FlexibleArmEnv(gym.Env):
             Dped = np.zeros((ne, nd), dtype=np.float32)
             Dpeu = np.zeros((ne, nu), dtype=np.float32)
 
-            gamma = 0.99
-            Xdd = gamma**2 * np.eye(nd, dtype=np.float32)
+            Xdd = self.gamma**2 * np.eye(nd, dtype=np.float32)
             Xde = np.zeros((nd, ne), dtype=np.float32)
             Xee = -np.eye(ne, dtype=np.float32)
         else:
@@ -588,8 +593,7 @@ class FlexibleArmEnv(gym.Env):
         MDeltapvw = np.array([[0]], dtype=np.float32)
         MDeltapww = mdelta_scale * np.array([[-1]], dtype=np.float32)
 
-        gamma = 0.99  # L2 gain
-        Xdd = supplyrate_scale * gamma**2 * np.eye(1, dtype=np.float32)
+        Xdd = supplyrate_scale * self.gamma**2 * np.eye(1, dtype=np.float32)
         Xde = np.zeros((1, 2), dtype=np.float32)
         Xee = supplyrate_scale * -np.eye(2, dtype=np.float32)
 
@@ -662,8 +666,7 @@ class FlexibleArmEnv(gym.Env):
         MDeltapvw = np.array([[0]], dtype=np.float32)
         MDeltapww = lagrange_multiplier * np.array([[-1]], dtype=np.float32)
 
-        gamma = 0.99  # L2 gain
-        Xdd = supplyrate_scale * gamma**2 * np.eye(1, dtype=np.float32)
+        Xdd = supplyrate_scale * self.gamma**2 * np.eye(1, dtype=np.float32)
         Xde = np.zeros((1, 2), dtype=np.float32)
         Xee = supplyrate_scale * -np.eye(2, dtype=np.float32)
 
