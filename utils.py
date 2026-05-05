@@ -1,39 +1,43 @@
+import math
+import os
+
+import numpy as np
 import torch
 import torch.nn as nn
-import math
-import numpy as np
+from ray.rllib.agents.callbacks import DefaultCallbacks
 
 _str_to_activation = {
-    'relu': nn.ReLU(),
-    'tanh': nn.Tanh(),
-    'leaky_relu': nn.LeakyReLU(),
-    'sigmoid': nn.Sigmoid(),
-    'selu': nn.SELU(),
-    'softplus': nn.Softplus(),
-    'identity': nn.Identity(),
+    "relu": nn.ReLU(),
+    "tanh": nn.Tanh(),
+    "leaky_relu": nn.LeakyReLU(),
+    "sigmoid": nn.Sigmoid(),
+    "selu": nn.SELU(),
+    "softplus": nn.Softplus(),
+    "identity": nn.Identity(),
 }
 
+
 def build_mlp(
-        input_size: int,
-        output_size: int,
-        n_layers: int,
-        size: int,
-        activation = 'tanh',
-        output_activation = 'identity',
+    input_size: int,
+    output_size: int,
+    n_layers: int,
+    size: int,
+    activation="tanh",
+    output_activation="identity",
 ):
     """
-        Builds a feedforward neural network
-        arguments:
-            input_placeholder: placeholder variable for the state (batch_size, input_size)
-            scope: variable scope of the network
-            n_layers: number of hidden layers
-            size: dimension of each hidden layer
-            activation: activation of each hidden layer
-            input_size: size of the input layer
-            output_size: size of the output layer
-            output_activation: activation of the output layer
-        returns:
-            output_placeholder: the result of a forward pass through the hidden layers + the output layer
+    Builds a feedforward neural network
+    arguments:
+        input_placeholder: placeholder variable for the state (batch_size, input_size)
+        scope: variable scope of the network
+        n_layers: number of hidden layers
+        size: dimension of each hidden layer
+        activation: activation of each hidden layer
+        input_size: size of the input layer
+        output_size: size of the output layer
+        output_activation: activation of the output layer
+    returns:
+        output_placeholder: the result of a forward pass through the hidden layers + the output layer
     """
     if isinstance(activation, str):
         activation = _str_to_activation[activation]
@@ -50,13 +54,16 @@ def build_mlp(
     return nn.Sequential(*layers)
 
 
-def uniform(output_size, input_size, lower_bound = None, upper_bound = None):
+def uniform(output_size, input_size, lower_bound=None, upper_bound=None):
     if input_size == 0 or output_size == 0:
         return torch.zeros((output_size, input_size))
     if lower_bound is None:
-        lower_bound = -1/math.sqrt(input_size)
+        lower_bound = -1 / math.sqrt(input_size)
         upper_bound = -lower_bound
-    return (upper_bound - lower_bound)*torch.rand(output_size, input_size) + lower_bound
+    return (upper_bound - lower_bound) * torch.rand(
+        output_size, input_size
+    ) + lower_bound
+
 
 def from_numpy(array, device=None):
     out = torch.tensor(array.astype(np.float32))
@@ -65,5 +72,32 @@ def from_numpy(array, device=None):
     else:
         return out
 
+
 def to_numpy(tensor):
-    return tensor.to('cpu').detach().numpy()
+    return tensor.to("cpu").detach().numpy()
+
+
+class ExportWeightsCallback(DefaultCallbacks):
+    def on_train_result(self, *, trainer, result, **kwargs):
+        policy = trainer.get_policy("default_policy")
+        model = policy.model
+        trial_dir = trainer.logdir
+        additional = {}
+        if hasattr(model, "P"):
+            additional["P"] = model.P
+        if hasattr(model, "Lambda"):
+            additional["Lambda"] = model.Lambda
+        data = model.state_dict() | additional
+
+        latest_path = os.path.join(trial_dir, "latest_model_state_dict.pth")
+        torch.save(data, latest_path)
+        print(f"\n--- Weights saved to: {latest_path} ---")
+
+        freq = trainer.config.get("checkpoint_freq", 1)
+        iteration = result["training_iteration"]
+        if iteration % freq == 0:
+            export_path = os.path.join(
+                trial_dir, f"model_state_dict_{iteration:06d}.pth"
+            )
+            torch.save(data, export_path)
+            print(f"\n--- Weights saved to: {export_path} ---")

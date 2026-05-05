@@ -21,6 +21,7 @@ from models import (
     LTIModel,
 )
 from trainers import ProjectedPPOTrainer
+from utils import ExportWeightsCallback
 
 # =====================
 # ENVIRONMENT CONFIGS
@@ -129,24 +130,24 @@ def get_implicit_model(dt, env, env_config):
     }
 
 
-def get_rinn_model(dt, env, env_config):
+def get_rinn_model(dt, env, env_config, nonlin_size):
     return {
         "custom_model": RINN,
         "custom_model_config": {
             "state_size": 2,
-            "nonlin_size": 16,
+            "nonlin_size": nonlin_size,
             "dt": dt,
             "log_std_init": np.log(1.0),
         },
     }
 
 
-def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff):
+def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonlin_size):
     return {
         "custom_model": DissipativeSimplestRINN,
         "custom_model_config": {
             "state_size": 2,
-            "nonlin_size": 16,
+            "nonlin_size": nonlin_size,
             "log_std_init": np.log(1.0),
             "dt": dt,
             "plant": env,
@@ -254,6 +255,24 @@ def main():
         default=1e7,
         help="Total number of environment timesteps for training",
     )
+    parser.add_argument(
+        "--nonlin_size",
+        type=int,
+        default=16,
+        help="Number of activation functions (nonlin_size) in RINN models",
+    )
+    parser.add_argument(
+        "--proj_freq",
+        type=int,
+        default=1,
+        help="Apply dissipativity projection every this many gradient steps (default: 1, i.e., every step)",
+    )
+    parser.add_argument(
+        "--checkpoint_freq",
+        type=int,
+        default=10,
+        help="Save a checkpoint (and export weights) every this many training iterations",
+    )
     args = parser.parse_args()
 
     args.saturate_inputs = not args.no_input_saturation
@@ -293,10 +312,10 @@ def main():
     if args.model == "fcnn":
         model_config = get_fully_connected_model(dt, env, env_config)
     elif args.model == "rinn":
-        model_config = get_rinn_model(dt, env, env_config)
+        model_config = get_rinn_model(dt, env, env_config, args.nonlin_size)
     elif args.model == "drinn":
         model_config = get_dissipative_simplest_rinn_model(
-            dt, env, env_config, args.trs, args.backoff
+            dt, env, env_config, args.trs, args.backoff, args.nonlin_size
         )
     elif args.model == "lti":
         model_config = get_lti_model(dt, env, env_config, args.trs, args.backoff)
@@ -321,6 +340,9 @@ def main():
         "evaluation_parallel_to_training": True,
         "clip_actions": False,
         "normalize_actions": args.saturate_inputs,
+        "projection_period": args.proj_freq,
+        "checkpoint_freq": args.checkpoint_freq,
+        "callbacks": ExportWeightsCallback,
     }
 
     print("==================================")
@@ -363,7 +385,7 @@ def main():
         name=args.experiment_name,
         local_dir="ray_results",
         checkpoint_at_end=True,
-        checkpoint_freq=100,
+        checkpoint_freq=args.checkpoint_freq,
     )
 
 
