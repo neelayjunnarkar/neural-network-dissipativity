@@ -8,8 +8,10 @@ import multiprocessing
 import os
 
 import numpy as np
-
 import ray
+from ray import tune
+from ray.rllib.agents.ppo import PPOTrainer
+
 from envs import FlexibleArmEnv, InvertedPendulumEnv, TimeDelayInvertedPendulumEnv
 from models import (
     RINN,
@@ -18,8 +20,6 @@ from models import (
     ImplicitModel,
     LTIModel,
 )
-from ray import tune
-from ray.rllib.agents.ppo import PPOTrainer
 from trainers import ProjectedPPOTrainer
 
 # =====================

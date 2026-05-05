@@ -2,6 +2,7 @@ import gym
 import numpy as np
 from gym import spaces
 from gym.utils import seeding
+
 from variable_structs import PlantParameters
 
 
@@ -20,7 +21,9 @@ class InvertedPendulumEnv(gym.Env):
         assert "disturbance_model" in env_config
         self.disturbance_model = env_config["disturbance_model"]
 
-        self.saturate_inputs = env_config["saturate_inputs"] if "saturate_inputs" in env_config else True
+        self.saturate_inputs = (
+            env_config["saturate_inputs"] if "saturate_inputs" in env_config else True
+        )
         assert self.saturate_inputs in [True, False]
 
         self.g = 9.8  # gravity (m/s^2)
@@ -59,7 +62,9 @@ class InvertedPendulumEnv(gym.Env):
         self.ne = None  # Performance output size. Defined based on supply_rate.
         self.ny = None  # Measurement output size. Defined later.
 
-        self.Ap = np.array([[0, 1], [0, -self.mu / (self.m * self.l**2)]], dtype=np.float32)
+        self.Ap = np.array(
+            [[0, 1], [0, -self.mu / (self.m * self.l**2)]], dtype=np.float32
+        )
         self.Bpw = np.array([[0], [self.g / self.l]], dtype=np.float32)
         self.Bpu = np.array([[0], [1 / (self.m * self.l**2)]], dtype=np.float32)
 
@@ -74,7 +79,9 @@ class InvertedPendulumEnv(gym.Env):
             self.ny = 1
             self.Cpy = np.array([[1, 0]], dtype=np.float32)
         else:
-            raise ValueError(f"observation {observation} must be one of 'partial', 'full'")
+            raise ValueError(
+                f"observation {observation} must be one of 'partial', 'full'"
+            )
         self.Dpyw = np.zeros((self.ny, self.nw), dtype=np.float32)
         # Dpyu is always 0
 
@@ -149,16 +156,16 @@ class InvertedPendulumEnv(gym.Env):
             self.Cpy = self.Cpy / self.observation_space.high
 
         self.state_size = self.nx
-        self.nonlin_size = (
-            self.nv
-        )  # TODO(Neelay): this nonlin_size parameter likely only works when nv = nw. Fix.
+        self.nonlin_size = self.nv  # TODO(Neelay): this nonlin_size parameter likely only works when nv = nw. Fix.
 
         # Sector bounds on Delta (in this case Delta = sin)
         # Sin is sector-bounded [0, 1] from [-pi, pi], [2/pi, 1] from [-pi/2, pi/2], and sector-bounded about [-0.2173, 1] in general.
         self.C_Delta = 0
         self.D_Delta = 1
 
-        self.MDeltapvv = np.array([[-2 * self.C_Delta * self.D_Delta]], dtype=np.float32)
+        self.MDeltapvv = np.array(
+            [[-2 * self.C_Delta * self.D_Delta]], dtype=np.float32
+        )
         self.MDeltapvw = np.array([[self.C_Delta + self.D_Delta]], dtype=np.float32)
         self.MDeltapww = np.array([[-2]], dtype=np.float32)
 
@@ -166,7 +173,9 @@ class InvertedPendulumEnv(gym.Env):
 
         self.seed(env_config["seed"] if "seed" in env_config else None)
 
-        self.reward_type = env_config["reward_type"] if "reward_type" in env_config else "default"
+        self.reward_type = (
+            env_config["reward_type"] if "reward_type" in env_config else "default"
+        )
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -223,7 +232,7 @@ class InvertedPendulumEnv(gym.Env):
         if self.reward_type == "default":
             reward = np.exp(-(u[0] ** 2))
         elif self.reward_type == "quadratic":
-            action_scale = 1/200.0
+            action_scale = 1 / 200.0
             reward = self.max_reward - action_scale * u[0] ** 2
         else:
             raise ValueError(f"Unexpected reward type: {self.reward_type}.")
@@ -286,15 +295,24 @@ class InvertedPendulumEnv(gym.Env):
     def check_parameter_sizes(self):
         assert (
             self.Ap.shape[0] == self.nx
-            and self.Ap.shape[0] == self.Bpw.shape[0] == self.Bpd.shape[0] == self.Bpu.shape[0]
+            and self.Ap.shape[0]
+            == self.Bpw.shape[0]
+            == self.Bpd.shape[0]
+            == self.Bpu.shape[0]
         ), f"{self.Ap.shape}, {self.Bpw.shape}, {self.Bpd.shape}, {self.Bpu.shape}"
         assert (
             self.Cpv.shape[0] == self.nv
-            and self.Cpv.shape[0] == self.Dpvw.shape[0] == self.Dpvd.shape[0] == self.Dpvu.shape[0]
+            and self.Cpv.shape[0]
+            == self.Dpvw.shape[0]
+            == self.Dpvd.shape[0]
+            == self.Dpvu.shape[0]
         ), f"{self.Cpv.shape}, {self.Dpvw.shape}, {self.Dpvd.shape}, {self.Dpvu.shape}"
         assert (
             self.Cpe.shape[0] == self.ne
-            and self.Cpe.shape[0] == self.Dpew.shape[0] == self.Dped.shape[0] == self.Dpeu.shape[0]
+            and self.Cpe.shape[0]
+            == self.Dpew.shape[0]
+            == self.Dped.shape[0]
+            == self.Dpeu.shape[0]
         ), f"{self.Cpe.shape}, {self.Dpew.shape}, {self.Dped.shape}, {self.Dpeu.shape}"
         assert (
             self.Cpy.shape[0] == self.ny
@@ -302,15 +320,24 @@ class InvertedPendulumEnv(gym.Env):
         ), f"{self.Cpy.shape}, {self.Dpyw.shape}, {self.Dpyd.shape}"
         assert (
             self.Ap.shape[1] == self.nx
-            and self.Ap.shape[1] == self.Cpv.shape[1] == self.Cpe.shape[1] == self.Cpy.shape[1]
+            and self.Ap.shape[1]
+            == self.Cpv.shape[1]
+            == self.Cpe.shape[1]
+            == self.Cpy.shape[1]
         ), f"{self.Ap.shape}, {self.Cpv.shape}, {self.Cpe.shape}, {self.Cpy.shape}"
         assert (
             self.Bpw.shape[1] == self.nw
-            and self.Bpw.shape[1] == self.Dpvw.shape[1] == self.Dpew.shape[1] == self.Dpyw.shape[1]
+            and self.Bpw.shape[1]
+            == self.Dpvw.shape[1]
+            == self.Dpew.shape[1]
+            == self.Dpyw.shape[1]
         ), f"{self.Bpw.shape}, {self.Dpvw.shape}, {self.Dpew.shape}, {self.Dpyw.shape}"
         assert (
             self.Bpd.shape[1] == self.nd
-            and self.Bpd.shape[1] == self.Dpvd.shape[1] == self.Dped.shape[1] == self.Dpyd.shape[1]
+            and self.Bpd.shape[1]
+            == self.Dpvd.shape[1]
+            == self.Dped.shape[1]
+            == self.Dpyd.shape[1]
         ), f"{self.Bpd.shape}, {self.Dvpd.shape}, {self.Dped.shape}, {self.Dpyd.shape}"
         assert (
             self.Bpu.shape[1] == self.nu
