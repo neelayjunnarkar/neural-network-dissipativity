@@ -39,10 +39,20 @@ def construct_dissipativity_matrix(
     """Constructs dissipativity condition from closed-loop matrices."""
     if stacker == "numpy":
         stacker = np.bmat
+        _zeros = np.zeros
+        _eye = np.eye
     elif stacker == "cvxpy":
         stacker = cp.bmat
+        _zeros = np.zeros
+        _eye = np.eye
+    elif stacker == "torch":
+        import torch as _torch
+        _ref = P
+        stacker = lambda rows: _torch.cat([_torch.cat(row, dim=1) for row in rows], dim=0)
+        _zeros = lambda shape: _ref.new_zeros(shape)
+        _eye = lambda n: _torch.eye(n, device=_ref.device, dtype=_ref.dtype)
     else:
-        raise ValueError(f"Stacker {stacker} must be 'numpy' or 'cvxpy'.")
+        raise ValueError(f"Stacker {stacker} must be 'numpy', 'cvxpy', or 'torch'.")
 
     # F = F1 + F2 + F3
     # where F1 has A^T P + P A, F2 is term with M, and F3 is term with X
@@ -50,19 +60,19 @@ def construct_dissipativity_matrix(
     # fmt: off
     F1 = stacker([
         [A.T @ P + P @ A, P @ Bw, P @ Bd],
-        [Bw.T @ P, np.zeros((Bw.shape[1], Bw.shape[1] + Bd.shape[1]))],
-        [Bd.T @ P, np.zeros((Bd.shape[1], Bw.shape[1] + Bd.shape[1]))]
+        [Bw.T @ P, _zeros((Bw.shape[1], Bw.shape[1] + Bd.shape[1]))],
+        [Bd.T @ P, _zeros((Bd.shape[1], Bw.shape[1] + Bd.shape[1]))]
     ])
 
     F2 = stacker([
-        [np.zeros((Cv.shape[1], Cv.shape[1])), Cv.T @ Mvw, np.zeros((Cv.shape[1], Dvd.shape[1]))],
+        [_zeros((Cv.shape[1], Cv.shape[1])), Cv.T @ Mvw, _zeros((Cv.shape[1], Dvd.shape[1]))],
         [Mvw.T @ Cv, Mvw.T @ Dvw + Dvw.T @ Mvw + Mww, Mvw.T @ Dvd],
-        [np.zeros((Dvd.shape[1], Cv.shape[1])), Dvd.T @ Mvw, np.zeros((Dvd.shape[1], Dvd.shape[1]))]
+        [_zeros((Dvd.shape[1], Cv.shape[1])), Dvd.T @ Mvw, _zeros((Dvd.shape[1], Dvd.shape[1]))]
     ])
 
     F3 = -stacker([
-        [np.zeros((Ce.shape[1], Ce.shape[1] + Dew.shape[1])), Ce.T @ Xde.T],
-        [np.zeros((Dew.shape[1], Ce.shape[1] + Dew.shape[1])), Dew.T @ Xde.T],
+        [_zeros((Ce.shape[1], Ce.shape[1] + Dew.shape[1])), Ce.T @ Xde.T],
+        [_zeros((Dew.shape[1], Ce.shape[1] + Dew.shape[1])), Dew.T @ Xde.T],
         [Xde @ Ce, Xde @ Dew, Xde @ Ded + Ded.T @ Xde.T + Xdd]
     ])
 
@@ -76,7 +86,7 @@ def construct_dissipativity_matrix(
 
     mat = stacker([
         [F, H.T],
-        [H, -np.eye(H.shape[0])]
+        [H, -_eye(H.shape[0])]
     ])
 
     # fmt: on
@@ -120,10 +130,17 @@ def construct_closed_loop(
 
     if stacker == "numpy":
         stacker = np.bmat
+        _zeros = np.zeros
     elif stacker == "cvxpy":
         stacker = cp.bmat
+        _zeros = np.zeros
+    elif stacker == "torch":
+        import torch as _torch
+        _ref = plant_params.Ap
+        stacker = lambda rows: _torch.cat([_torch.cat(row, dim=1) for row in rows], dim=0)
+        _zeros = lambda shape: _ref.new_zeros(shape)
     else:
-        raise ValueError(f"Stacker {stacker} must be 'numpy' or 'cvxpy'.")
+        raise ValueError(f"Stacker {stacker} must be 'numpy', 'cvxpy', or 'torch'.")
 
     # fmt: off
     A = stacker([
@@ -160,18 +177,18 @@ def construct_closed_loop(
         [Dped + Dpeu @ Dkuy @ Dpyd]
     ])
 
-    LDelta = np.bmat([
-        [LDeltap, np.zeros((LDeltap.shape[0], Lambda.shape[1]))],
-        [np.zeros((Lambda.shape[0], LDeltap.shape[1] + Lambda.shape[1]))]
+    LDelta = stacker([
+        [LDeltap, _zeros((LDeltap.shape[0], Lambda.shape[1]))],
+        [_zeros((Lambda.shape[0], LDeltap.shape[1] + Lambda.shape[1]))]
     ])
 
     Mvw = stacker([
-        [MDeltapvw, np.zeros((MDeltapvv.shape[0], Lambda.shape[1]))],
-        [np.zeros((Lambda.shape[0], MDeltapvw.shape[1])), Lambda]
+        [MDeltapvw, _zeros((MDeltapvv.shape[0], Lambda.shape[1]))],
+        [_zeros((Lambda.shape[0], MDeltapvw.shape[1])), Lambda]
     ])
     Mww = stacker([
-        [MDeltapww, np.zeros((MDeltapww.shape[0], Lambda.shape[1]))],
-        [np.zeros((Lambda.shape[0], MDeltapww.shape[1])), -2*Lambda]
+        [MDeltapww, _zeros((MDeltapww.shape[0], Lambda.shape[1]))],
+        [_zeros((Lambda.shape[0], MDeltapww.shape[1])), -2*Lambda]
     ])
     # fmt: on
 

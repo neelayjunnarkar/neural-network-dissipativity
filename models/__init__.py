@@ -9,10 +9,12 @@ from models.implicit_model import ImplicitModel
 from models.LTI import LTIModel
 from models.RINN import RINN
 from models.RNN import RNN
+from models.soft_dissipative_RINN import SoftDissipativeRINN
 
 model_map = {
     "<class 'models.implicit_model.ImplicitModel'>": ImplicitModel,
     "<class 'models.dissipative_simplest_RINN.DissipativeSimplestRINN'>": DissipativeSimplestRINN,
     "<class 'models.LTI.LTIModel'>": LTIModel,
     "<class 'models.RINN.RINN'>": RINN,
+    "<class 'models.soft_dissipative_RINN.SoftDissipativeRINN'>": SoftDissipativeRINN,
 }

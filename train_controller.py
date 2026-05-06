@@ -10,7 +10,6 @@ import os
 import numpy as np
 import ray
 from ray import tune
-from ray.rllib.agents.ppo import PPOTrainer
 
 from envs import FlexibleArmEnv, InvertedPendulumEnv, TimeDelayInvertedPendulumEnv
 from models import (
@@ -19,8 +18,9 @@ from models import (
     FullyConnectedNetwork,
     ImplicitModel,
     LTIModel,
+    SoftDissipativeRINN,
 )
-from trainers import ProjectedPPOTrainer
+from trainers import NonProjectedPPOTrainer, ProjectedPPOTrainer
 from utils import ExportWeightsCallback
 
 # =====================
@@ -167,6 +167,32 @@ def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonli
     }
 
 
+def get_soft_dissipative_rinn_model(
+    dt, env, env_config, trs, backoff, nonlin_size, soft_weight, free_P, free_Lambda
+):
+    return {
+        "custom_model": SoftDissipativeRINN,
+        "custom_model_config": {
+            "state_size": 2,
+            "nonlin_size": nonlin_size,
+            "log_std_init": np.log(1.0),
+            "dt": dt,
+            "plant": env,
+            "plant_config": env_config,
+            "eps": 1e-3,
+            "soft_weight": soft_weight,
+            "free_P": free_P,
+            "free_Lambda": free_Lambda,
+            "lti_initializer": "dissipative_thetahat",
+            "lti_initializer_kwargs": {
+                "trs_mode": "fixed",
+                "min_trs": trs,
+                "backoff_factor": backoff,
+            },
+        },
+    }
+
+
 def get_lti_model(dt, env, env_config, trs, backoff):
     return {
         "custom_model": LTIModel,
@@ -197,7 +223,7 @@ def main():
         "--model",
         type=str,
         required=True,
-        choices=["fcnn", "rinn", "drinn", "lti"],
+        choices=["fcnn", "rinn", "drinn", "lti", "srinn"],
         help="Controller model to use",
     )
     parser.add_argument(
@@ -268,6 +294,24 @@ def main():
         help="Apply dissipativity projection every this many gradient steps (default: 1, i.e., every step)",
     )
     parser.add_argument(
+        "--soft_weight",
+        type=float,
+        default=1.0,
+        help="Penalty coefficient for soft dissipativity (srinn model only)",
+    )
+    parser.add_argument(
+        "--free_P",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="If set, P is a learnable parameter in the soft dissipativity model (default: True)",
+    )
+    parser.add_argument(
+        "--free_Lambda",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="If set, Lambda is a learnable parameter in the soft dissipativity model (default: True)",
+    )
+    parser.add_argument(
         "--checkpoint_freq",
         type=int,
         default=10,
@@ -319,6 +363,18 @@ def main():
         )
     elif args.model == "lti":
         model_config = get_lti_model(dt, env, env_config, args.trs, args.backoff)
+    elif args.model == "srinn":
+        model_config = get_soft_dissipative_rinn_model(
+            dt,
+            env,
+            env_config,
+            args.trs,
+            args.backoff,
+            args.nonlin_size,
+            args.soft_weight,
+            args.free_P,
+            args.free_Lambda,
+        )
     else:
         raise ValueError(f"Unknown model: {args.model}")
 
@@ -340,7 +396,7 @@ def main():
         "evaluation_parallel_to_training": True,
         "clip_actions": False,
         "normalize_actions": args.saturate_inputs,
-        "projection_period": args.proj_freq,
+        # "projection_period": args.proj_freq,
         "checkpoint_freq": args.checkpoint_freq,
         "callbacks": ExportWeightsCallback,
     }
@@ -368,10 +424,12 @@ def main():
         return name
 
     # Select trainer based on model
-    if model_config["custom_model"].__name__ == "FullyConnectedNetwork":
-        trainer_cls = PPOTrainer
+    _no_projection_models = {"FullyConnectedNetwork", "SoftDissipativeRINN"}
+    if model_config["custom_model"].__name__ in _no_projection_models:
+        trainer_cls = NonProjectedPPOTrainer
     else:
         trainer_cls = ProjectedPPOTrainer
+        config["projection_period"] = args.proj_freq
 
     ray.init()
     tune.run(

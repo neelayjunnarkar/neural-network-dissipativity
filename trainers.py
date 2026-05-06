@@ -46,6 +46,16 @@ class ProjectedPGTrainer(pg.PGTrainer):
     def get_default_config(cls):
         config = pg.PGTrainer.get_default_config()
         config["projection_period"] = 1
+        config["checkpoint_freq"] = 10
+        return config
+
+
+class NonProjectedPPOTrainer(ppo.PPOTrainer):
+    @classmethod
+    @override(ppo.PPOTrainer)
+    def get_default_config(cls):
+        config = ppo.PPOTrainer.get_default_config()
+        config["checkpoint_freq"] = 10
         return config
 
 
@@ -59,5 +69,5 @@ class ProjectedPPOTrainer(ppo.PPOTrainer):
     def get_default_config(cls):
         config = ppo.PPOTrainer.get_default_config()
         config["projection_period"] = 1
-        config["checkpoint_freq"] = 1
+        config["checkpoint_freq"] = 10
         return config
