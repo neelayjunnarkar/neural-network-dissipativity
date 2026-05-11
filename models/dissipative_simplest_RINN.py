@@ -7,9 +7,15 @@ from ray.rllib.models.torch.recurrent_net import RecurrentNetwork
 from ray.rllib.utils.annotations import override
 from torchdeq.norm import apply_norm, reset_norm
 
+import torch.nn.functional as F
+
 import lti_controllers
 from activations import activations_map
-from theta_dissipativity import Projector as ThetaProjector
+from theta_dissipativity import (
+    Projector as ThetaProjector,
+    construct_closed_loop,
+    construct_dissipativity_matrix,
+)
 from thetahat_dissipativity import Projector as ThetahatProjector
 from utils import build_mlp, from_numpy, to_numpy, uniform
 from variable_structs import ControllerThetaParameters
@@ -154,6 +160,18 @@ class DissipativeSimplestRINN(RecurrentNetwork, nn.Module):
             self.Lambda = torch.eye(self.nonlin_size, device=self.log_stds.device)
 
         self.plant_params = np_plant_params.np_to_torch(device=self.Lambda.device)
+
+        self.soft_weight = model_config.get("soft_weight", 0.0)
+        if self.soft_weight > 0.0:
+            device = self.log_stds.device
+            Dm, Vm = np.linalg.eigh(np_plant_params.MDeltapvv)
+            LDeltap_np = np.diag(np.sqrt(np.maximum(Dm, 0.0))) @ Vm.T
+            self.register_buffer("LDeltap", from_numpy(LDeltap_np, device=device))
+            Dx, Vx = np.linalg.eigh(-np_plant_params.Xee)
+            LX_np = np.diag(np.sqrt(np.maximum(Dx, 0.0))) @ Vx.T
+            self.register_buffer("LX", from_numpy(LX_np, device=device))
+            self.register_buffer("Xdd", from_numpy(np_plant_params.Xdd, device=device))
+            self.register_buffer("Xde", from_numpy(np_plant_params.Xde, device=device))
 
         lti_initializer = (
             model_config["lti_initializer"] if "lti_initializer" in model_config else None
@@ -313,6 +331,35 @@ class DissipativeSimplestRINN(RecurrentNetwork, nn.Module):
         if self.oldtheta is not None:
             print_norms(theta - self.oldtheta, "theta - oldtheta")
         self.oldtheta = theta.detach().clone()
+
+    @override(ModelV2)
+    def custom_loss(self, policy_loss, loss_inputs):
+        if self.soft_weight == 0.0:
+            return policy_loss
+        penalty = self._dissipativity_penalty()
+        if isinstance(policy_loss, list):
+            return [pl + penalty for pl in policy_loss]
+        return policy_loss + penalty
+
+    def _dissipativity_penalty(self):
+        controller_params = ControllerThetaParameters(
+            self.A_T.t(), self.Bw_T.t(), self.By_T.t(),
+            self.Cv_T.t(), self.Dvw_T.t(), self.Dvy_T.t(),
+            self.Cu_T.t(), self.Duw_T.t(), self.Duy_T.t(),
+            self.Lambda,
+        )
+        A, Bw, Bd, Cv, Dvw, Dvd, Ce, Dew, Ded, LDelta, Mvw, Mww = construct_closed_loop(
+            self.plant_params, self.LDeltap, controller_params, "torch"
+        )
+        mat = construct_dissipativity_matrix(
+            A, Bw, Bd, Cv, Dvw, Dvd, Ce, Dew, Ded,
+            self.P, LDelta, Mvw, Mww,
+            self.Xdd, self.Xde, self.LX, "torch",
+        )
+        dissipativity_violation = F.relu(torch.linalg.eigvalsh(mat).max())
+        wp_mat = self.Lambda @ self.Dvw_T.t() + self.Dvw_T @ self.Lambda - 2 * self.Lambda
+        wp_violation = F.relu(torch.linalg.eigvalsh(wp_mat).max())
+        return self.soft_weight * (dissipativity_violation + wp_violation)
 
     def enforce_dissipativity(self):
         """Projects current theta parameters to ones that are certified by P and Lambda."""

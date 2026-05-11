@@ -142,7 +142,7 @@ def get_rinn_model(dt, env, env_config, nonlin_size):
     }
 
 
-def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonlin_size):
+def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonlin_size, soft_weight=0.0):
     return {
         "custom_model": DissipativeSimplestRINN,
         "custom_model_config": {
@@ -155,13 +155,14 @@ def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonli
             "eps": 1e-3,
             "mode": "thetahat",
             "trs_mode": "fixed",
-            "min_trs": trs,  # 1,
-            "backoff_factor": backoff,  # 1.05,
+            "min_trs": trs,
+            "backoff_factor": backoff,
+            "soft_weight": soft_weight,
             "lti_initializer": "dissipative_thetahat",
             "lti_initializer_kwargs": {
                 "trs_mode": "fixed",
-                "min_trs": trs,  # 1,
-                "backoff_factor": backoff,  # 1.05,
+                "min_trs": trs,
+                "backoff_factor": backoff,
             },
         },
     }
@@ -193,7 +194,7 @@ def get_soft_dissipative_rinn_model(
     }
 
 
-def get_lti_model(dt, env, env_config, trs, backoff):
+def get_lti_model(dt, env, env_config, trs, backoff, soft_weight=0.0):
     return {
         "custom_model": LTIModel,
         "custom_model_config": {
@@ -204,12 +205,13 @@ def get_lti_model(dt, env, env_config, trs, backoff):
             "log_std_init": np.log(1.0),
             "state_size": 2,
             "trs_mode": "fixed",
-            "min_trs": trs,  # 1.5, # 1.44,
+            "min_trs": trs,
+            "soft_weight": soft_weight,
             "lti_controller": "dissipative_thetahat",
             "lti_controller_kwargs": {
                 "trs_mode": "fixed",
-                "min_trs": trs,  # 1.5 # 1.44
-                "backoff_factor": backoff,  # 1.05
+                "min_trs": trs,
+                "backoff_factor": backoff,
             },
         },
     }
@@ -296,8 +298,8 @@ def main():
     parser.add_argument(
         "--soft_weight",
         type=float,
-        default=1.0,
-        help="Penalty coefficient for soft dissipativity (srinn model only)",
+        default=0.0,
+        help="Penalty coefficient for soft dissipativity (drinn, lti, and srinn models)",
     )
     parser.add_argument(
         "--free_P",
@@ -359,10 +361,10 @@ def main():
         model_config = get_rinn_model(dt, env, env_config, args.nonlin_size)
     elif args.model == "drinn":
         model_config = get_dissipative_simplest_rinn_model(
-            dt, env, env_config, args.trs, args.backoff, args.nonlin_size
+            dt, env, env_config, args.trs, args.backoff, args.nonlin_size, args.soft_weight
         )
     elif args.model == "lti":
-        model_config = get_lti_model(dt, env, env_config, args.trs, args.backoff)
+        model_config = get_lti_model(dt, env, env_config, args.trs, args.backoff, args.soft_weight)
     elif args.model == "srinn":
         model_config = get_soft_dissipative_rinn_model(
             dt,
