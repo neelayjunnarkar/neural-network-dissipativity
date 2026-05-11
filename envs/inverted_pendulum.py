@@ -20,6 +20,8 @@ class InvertedPendulumEnv(gym.Env):
 
         assert "disturbance_model" in env_config
         self.disturbance_model = env_config["disturbance_model"]
+        self.reset_scale = env_config.get("reset_scale", 1.0)
+        self.sim_disturbance = env_config.get("sim_disturbance", False)
 
         self.saturate_inputs = (
             env_config["saturate_inputs"] if "saturate_inputs" in env_config else True
@@ -229,6 +231,19 @@ class InvertedPendulumEnv(gym.Env):
 
         self.state = self.next_state(self.state, d, u)
 
+        if self.sim_disturbance:
+            # Apply an occasional torque kick through the Bpu channel.
+            # This does NOT affect Bpd or get_params() — certificates are unchanged.
+            p = 3 * self.dt
+            rand_sim = self.np_random.uniform()
+            if rand_sim < p / 2:
+                d_sim = 3 * self.action_space.low.astype(np.float32)
+            elif rand_sim < p:
+                d_sim = 3 * self.action_space.high.astype(np.float32)
+            else:
+                d_sim = np.zeros((self.nu,), dtype=np.float32)
+            self.state = self.state + self.dt * (self.Bpu @ d_sim)
+
         if self.reward_type == "default":
             reward = np.exp(-(u[0] ** 2))
         elif self.reward_type == "quadratic":
@@ -251,10 +266,10 @@ class InvertedPendulumEnv(gym.Env):
 
     def reset(self, state=None):
         if state is None:
-            # high = np.array([0.6 * self.max_pos, 0.1 * self.max_speed], dtype=np.float32) * self.factor
-            high = (
-                np.array([0.6 * self.max_pos, 0.25 * self.max_speed], dtype=np.float32)
-                # * self.factor
+            high = np.clip(
+                self.reset_scale * np.array([0.6 * self.max_pos, 0.25 * self.max_speed], dtype=np.float32),
+                0,
+                [self.max_pos, self.max_speed],
             )
             self.state = self.np_random.uniform(low=-high, high=high).astype(np.float32)
         else:

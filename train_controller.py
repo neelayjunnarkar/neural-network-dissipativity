@@ -28,7 +28,7 @@ from utils import ExportWeightsCallback
 # =====================
 
 
-def get_inverted_pendulum_env(seed, saturate_inputs, reward_type=None):
+def get_inverted_pendulum_env(seed, saturate_inputs, reward_type=None, reset_scale=1.0, sim_disturbance=False):
     dt = 0.01
     env = InvertedPendulumEnv
     env_config = {
@@ -39,6 +39,8 @@ def get_inverted_pendulum_env(seed, saturate_inputs, reward_type=None):
         "disturbance_model": "occasional",
         "seed": seed,
         "saturate_inputs": saturate_inputs,
+        "reset_scale": reset_scale,
+        "sim_disturbance": sim_disturbance,
     }
     if reward_type is not None:
         env_config["reward_type"] = reward_type
@@ -314,6 +316,17 @@ def main():
         help="If set, Lambda is a learnable parameter in the soft dissipativity model (default: True)",
     )
     parser.add_argument(
+        "--reset_scale",
+        type=float,
+        default=1.0,
+        help="Scale factor for initial condition range in inverted_pendulum (default: 1.0)",
+    )
+    parser.add_argument(
+        "--sim_disturbance",
+        action="store_true",
+        help="Apply occasional torque disturbance through Bpu in simulation (does not affect Bpd or dissipativity certificates)",
+    )
+    parser.add_argument(
         "--checkpoint_freq",
         type=int,
         default=10,
@@ -345,7 +358,8 @@ def main():
         )
     elif args.env == "inverted_pendulum":
         dt, env, env_config = get_inverted_pendulum_env(
-            args.seed, args.saturate_inputs, args.reward_type
+            args.seed, args.saturate_inputs, args.reward_type,
+            reset_scale=args.reset_scale, sim_disturbance=args.sim_disturbance,
         )
     elif args.env == "time_delay_inverted_pendulum":
         dt, env, env_config = get_time_delay_inverted_pendulum_env(
