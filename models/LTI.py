@@ -284,7 +284,11 @@ class LTIModel(RecurrentNetwork, nn.Module):
         )
         assert unexpected == [], f"Loading unexpected key after projection: {unexpected}"
         # fmt: off
-        assert missing ==  ['log_stds', 'value.0.weight', 'value.0.bias', 'value.2.weight', 'value.2.bias', 'value.4.weight', 'value.4.bias'], missing
+        expected_missing = ["log_stds"]
+        if self.soft_weight > 0.0:
+            expected_missing += ["LDeltap", "LX", "Xdd", "Xde"]
+        expected_missing += ["value.0.weight", "value.0.bias", "value.2.weight", "value.2.bias", "value.4.weight", "value.4.bias"]
+        assert missing == expected_missing, missing
         # fmt: on
 
     @override(ModelV2)
