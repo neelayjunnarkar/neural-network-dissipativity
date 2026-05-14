@@ -171,7 +171,8 @@ def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonli
 
 
 def get_soft_dissipative_rinn_model(
-    dt, env, env_config, trs, backoff, nonlin_size, soft_weight, free_P, free_Lambda
+    dt, env, env_config, trs, backoff, nonlin_size, soft_weight, free_P, free_Lambda,
+    nonlin_init_scale=0.0,
 ):
     return {
         "custom_model": SoftDissipativeRINN,
@@ -186,6 +187,7 @@ def get_soft_dissipative_rinn_model(
             "soft_weight": soft_weight,
             "free_P": free_P,
             "free_Lambda": free_Lambda,
+            "nonlin_init_scale": nonlin_init_scale,
             "lti_initializer": "dissipative_thetahat",
             "lti_initializer_kwargs": {
                 "trs_mode": "fixed",
@@ -316,6 +318,13 @@ def main():
         help="If set, Lambda is a learnable parameter in the soft dissipativity model (default: True)",
     )
     parser.add_argument(
+        "--nonlin_init_scale",
+        type=float,
+        default=0.0,
+        help="Scale for random init of nonlinear paths after LTI init in SoftDissipativeRINN. "
+             "0.0 = zero init (original behavior). Recommended: 0.1",
+    )
+    parser.add_argument(
         "--reset_scale",
         type=float,
         default=1.0,
@@ -390,6 +399,7 @@ def main():
             args.soft_weight,
             args.free_P,
             args.free_Lambda,
+            args.nonlin_init_scale,
         )
     else:
         raise ValueError(f"Unknown model: {args.model}")

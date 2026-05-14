@@ -8,7 +8,7 @@ from ray.rllib.utils.annotations import override
 import lti_controllers
 from models.RINN import RINN
 from theta_dissipativity import construct_closed_loop, construct_dissipativity_matrix
-from utils import from_numpy
+from utils import from_numpy, uniform
 from variable_structs import ControllerThetaParameters
 
 
@@ -54,6 +54,7 @@ class SoftDissipativeRINN(RINN):
         self.free_P = cfg.get("free_P", True)
         self.free_Lambda = cfg.get("free_Lambda", True)
         self._eps = cfg.get("eps", 1e-6)
+        nonlin_init_scale = cfg.get("nonlin_init_scale", 0.0)
 
         assert "plant" in cfg and "plant_config" in cfg, (
             "plant and plant_config are required"
@@ -115,6 +116,12 @@ class SoftDissipativeRINN(RINN):
             self.Duw_T = nn.Parameter(
                 torch.zeros(self.nonlin_size, self.output_size, device=device)
             )
+            if nonlin_init_scale > 0.0:
+                self.Bw_T  = nn.Parameter(nonlin_init_scale * uniform(self.nonlin_size, self.state_size).to(device))
+                self.Cv_T  = nn.Parameter(nonlin_init_scale * uniform(self.state_size,  self.nonlin_size).to(device))
+                self.Dvw_T = nn.Parameter(nonlin_init_scale * uniform(self.nonlin_size, self.nonlin_size).to(device))
+                self.Dvy_T = nn.Parameter(nonlin_init_scale * uniform(self.input_size,  self.nonlin_size).to(device))
+                self.Duw_T = nn.Parameter(nonlin_init_scale * uniform(self.nonlin_size, self.output_size).to(device))
             if "P" in info:
                 P_init = info["P"].astype(np.float32)
 
