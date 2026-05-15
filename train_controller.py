@@ -98,9 +98,11 @@ def get_flexible_arm_env_partial(seed, saturate_inputs, l2_gain=None, reward_typ
         "design_model": "rigidplus_integrator",
         "delta_alpha": 1.0,
         "design_integrator_type": "utox2",
+        "b": 0.1,  # uncertainty bound ||Delta|| <= b for utox2
         "supplyrate_scale": 0.5,
         "lagrange_multiplier": 5,
         # "design_integrator_type": "utoy",
+        # "b": 0.0005,
         # "supplyrate_scale": 1,
         # "lagrange_multiplier": 1000,
         "saturate_inputs": saturate_inputs,
