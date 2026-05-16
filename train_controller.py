@@ -28,7 +28,9 @@ from utils import ExportWeightsCallback
 # =====================
 
 
-def get_inverted_pendulum_env(seed, saturate_inputs, reward_type=None, reset_scale=1.0, sim_disturbance=False):
+def get_inverted_pendulum_env(
+    seed, saturate_inputs, reward_type=None, reset_scale=1.0, sim_disturbance=False
+):
     dt = 0.01
     env = InvertedPendulumEnv
     env_config = {
@@ -146,7 +148,9 @@ def get_rinn_model(dt, env, env_config, nonlin_size):
     }
 
 
-def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonlin_size, soft_weight=0.0):
+def get_dissipative_simplest_rinn_model(
+    dt, env, env_config, trs, backoff, nonlin_size, soft_weight=0.0
+):
     return {
         "custom_model": DissipativeSimplestRINN,
         "custom_model_config": {
@@ -173,7 +177,15 @@ def get_dissipative_simplest_rinn_model(dt, env, env_config, trs, backoff, nonli
 
 
 def get_soft_dissipative_rinn_model(
-    dt, env, env_config, trs, backoff, nonlin_size, soft_weight, free_P, free_Lambda,
+    dt,
+    env,
+    env_config,
+    trs,
+    backoff,
+    nonlin_size,
+    soft_weight,
+    free_P,
+    free_Lambda,
     nonlin_init_scale=0.0,
 ):
     return {
@@ -324,7 +336,7 @@ def main():
         type=float,
         default=0.0,
         help="Scale for random init of nonlinear paths after LTI init in SoftDissipativeRINN. "
-             "0.0 = zero init (original behavior). Recommended: 0.1",
+        "0.0 = zero init (original behavior). Recommended: 0.1",
     )
     parser.add_argument(
         "--reset_scale",
@@ -354,6 +366,8 @@ def main():
         JOB_ID = os.getenv("SLURM_JOB_ID")
     else:
         N_CPUS = multiprocessing.cpu_count()
+        if N_CPUS >= 24:
+            N_CPUS = 16  # Forcing to smaller number for nicer sharing lab computer
         JOB_ID = None
     n_tasks = 1
     n_workers_per_task = int(math.floor(N_CPUS / n_tasks)) - 2
@@ -369,8 +383,11 @@ def main():
         )
     elif args.env == "inverted_pendulum":
         dt, env, env_config = get_inverted_pendulum_env(
-            args.seed, args.saturate_inputs, args.reward_type,
-            reset_scale=args.reset_scale, sim_disturbance=args.sim_disturbance,
+            args.seed,
+            args.saturate_inputs,
+            args.reward_type,
+            reset_scale=args.reset_scale,
+            sim_disturbance=args.sim_disturbance,
         )
     elif args.env == "time_delay_inverted_pendulum":
         dt, env, env_config = get_time_delay_inverted_pendulum_env(
@@ -386,10 +403,18 @@ def main():
         model_config = get_rinn_model(dt, env, env_config, args.nonlin_size)
     elif args.model == "drinn":
         model_config = get_dissipative_simplest_rinn_model(
-            dt, env, env_config, args.trs, args.backoff, args.nonlin_size, args.soft_weight
+            dt,
+            env,
+            env_config,
+            args.trs,
+            args.backoff,
+            args.nonlin_size,
+            args.soft_weight,
         )
     elif args.model == "lti":
-        model_config = get_lti_model(dt, env, env_config, args.trs, args.backoff, args.soft_weight)
+        model_config = get_lti_model(
+            dt, env, env_config, args.trs, args.backoff, args.soft_weight
+        )
     elif args.model == "srinn":
         model_config = get_soft_dissipative_rinn_model(
             dt,
@@ -459,7 +484,7 @@ def main():
         trainer_cls = ProjectedPPOTrainer
         config["projection_period"] = args.proj_freq
 
-    ray.init()
+    ray.init(num_gpus=0)
     tune.run(
         trainer_cls,
         config=config,
