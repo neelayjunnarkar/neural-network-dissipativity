@@ -187,20 +187,22 @@ def get_soft_dissipative_rinn_model(
     free_P,
     free_Lambda,
     nonlin_init_scale=0.0,
+    use_lti_init=True,
 ):
-    return {
-        "custom_model": SoftDissipativeRINN,
-        "custom_model_config": {
-            "state_size": 2,
-            "nonlin_size": nonlin_size,
-            "log_std_init": np.log(1.0),
-            "dt": dt,
-            "plant": env,
-            "plant_config": env_config,
-            "eps": 1e-3,
-            "soft_weight": soft_weight,
-            "free_P": free_P,
-            "free_Lambda": free_Lambda,
+    cfg = {
+        "state_size": 2,
+        "nonlin_size": nonlin_size,
+        "log_std_init": np.log(1.0),
+        "dt": dt,
+        "plant": env,
+        "plant_config": env_config,
+        "eps": 1e-3,
+        "soft_weight": soft_weight,
+        "free_P": free_P,
+        "free_Lambda": free_Lambda,
+    }
+    if use_lti_init:
+        cfg.update({
             "nonlin_init_scale": nonlin_init_scale,
             "lti_initializer": "dissipative_thetahat",
             "lti_initializer_kwargs": {
@@ -208,8 +210,8 @@ def get_soft_dissipative_rinn_model(
                 "min_trs": trs,
                 "backoff_factor": backoff,
             },
-        },
-    }
+        })
+    return {"custom_model": SoftDissipativeRINN, "custom_model_config": cfg}
 
 
 def get_lti_model(dt, env, env_config, trs, backoff, soft_weight=0.0):
@@ -355,6 +357,11 @@ def main():
         default=10,
         help="Save a checkpoint (and export weights) every this many training iterations",
     )
+    parser.add_argument(
+        "--no_lti_init",
+        action="store_true",
+        help="If set, SoftDissipativeRINN uses pure RINN random init (no LTI warm-start)",
+    )
     args = parser.parse_args()
 
     args.saturate_inputs = not args.no_input_saturation
@@ -427,6 +434,7 @@ def main():
             args.free_P,
             args.free_Lambda,
             args.nonlin_init_scale,
+            use_lti_init=not args.no_lti_init,
         )
     else:
         raise ValueError(f"Unknown model: {args.model}")
