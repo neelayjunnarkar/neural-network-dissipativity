@@ -1,7 +1,9 @@
 Synthesizing Neural Network Controllers with Closed-Loop Dissipativity Guarantees
 ===================================
 
-This repository contains code for the paper "[Synthesizing Neural Network Controllers with Closed-Loop Dissipativity Guarantees](https://arxiv.org/abs/2404.07373)".
+[![arXiv](https://img.shields.io/badge/arXiv-2404.07373-b31b1b.svg)](https://arxiv.org/abs/2404.07373)
+
+This repository contains code for the paper "[Synthesizing Neural Network Controllers with Closed-Loop Dissipativity Guarantees](https://doi.org/10.1016/j.automatica.2026.113185)".
 
 See `train_controller.py` for example usage.
 
